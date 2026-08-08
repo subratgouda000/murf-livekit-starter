@@ -33,9 +33,9 @@ export interface AppConfig {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  companyName: 'Murf AI',
-  pageTitle: 'Voice Agent Starter',
-  pageDescription: 'A voice agent powered by Murf Falcon — the fastest TTS API',
+  companyName: 'Sehat Sathi',
+  pageTitle: 'Sehat Sathi — Your Health Companion',
+  pageDescription: 'Talk to a caring voice assistant for health questions, symptom guidance, and knowing when to see a doctor — built with Murf Falcon.',
 
   supportsChatInput: true,
   supportsVideoInput: true,
@@ -43,10 +43,10 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   isPreConnectBufferEnabled: true,
 
   logo: '/murf-logo.svg',
-  accent: '#6366F1',
+  accent: '#0F9D8C',
   logoDark: '/murf-logo-dark.svg',
-  accentDark: '#818cf8',
-  startButtonText: 'Start talking',
+  accentDark: '#34D9C4',
+  startButtonText: 'Talk to your health assistant',
 
   // optional: audio visualization configuration
   // audioVisualizerType: 'bar',

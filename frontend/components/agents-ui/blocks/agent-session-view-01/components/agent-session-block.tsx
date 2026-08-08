@@ -257,7 +257,18 @@ export function AgentSessionView_01({
             )}
           </AnimatePresence>
         )}
-        <div className="bg-background relative mx-auto max-w-2xl pb-3 md:pb-12">
+        {session.isConnected && (
+          <p className="pointer-events-none mx-auto mb-2 block w-full max-w-2xl text-center text-sm font-semibold">
+            {agentState === 'speaking'
+              ? 'Agent is speaking'
+              : agentState === 'listening'
+                ? 'Listening to you'
+                : agentState === 'thinking'
+                  ? 'Thinking...'
+                  : ''}
+          </p>
+        )}
+	<div className="bg-background relative mx-auto max-w-2xl pb-3 md:pb-12">
           <Fade bottom className="absolute inset-x-0 top-0 h-4 -translate-y-full" />
           <AgentControlBar
             variant="livekit"

@@ -1,5 +1,6 @@
-'use client';
+﻿'use client';
 
+import { useState } from 'react';
 import { useTheme } from 'next-themes';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSessionContext } from '@livekit/components-react';
@@ -35,19 +36,39 @@ interface ViewControllerProps {
 export function ViewController({ appConfig }: ViewControllerProps) {
   const { isConnected, start } = useSessionContext();
   const { resolvedTheme } = useTheme();
+  const [micError, setMicError] = useState<string | null>(null);
+
+  const handleStartCall = async () => {
+    setMicError(null);
+    try {
+      await start();
+    } catch (err: unknown) {
+      const error = err as { name?: string; message?: string };
+      if (
+        error?.name === 'NotAllowedError' ||
+        error?.name === 'PermissionDeniedError' ||
+        (error?.message && error.message.toLowerCase().includes('permission'))
+      ) {
+        setMicError(
+          'Microphone access is blocked. Please allow microphone access in your browser settings (click the lock or camera icon in the address bar) and try again.'
+        );
+      } else {
+        setMicError('Could not start the call. Please check your connection and try again.');
+      }
+    }
+  };
 
   return (
     <AnimatePresence mode="wait">
-      {/* Welcome view */}
       {!isConnected && (
         <MotionWelcomeView
           key="welcome"
           {...VIEW_MOTION_PROPS}
           startButtonText={appConfig.startButtonText}
-          onStartCall={start}
+          onStartCall={handleStartCall}
+          micError={micError}
         />
       )}
-      {/* Session view */}
       {isConnected && (
         <MotionSessionView
           key="session-view"
