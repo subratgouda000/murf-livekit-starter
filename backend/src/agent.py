@@ -19,6 +19,7 @@ from livekit.plugins import murf, silero, google, deepgram, noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 import db
+import facilities
 
 logger = logging.getLogger("agent")
 
@@ -32,7 +33,9 @@ OBJECTIVES: A successful call helps the person (1) describe their symptom clearl
 
 KNOWLEDGE: You know general health information and common symptom guidance. You do not know the person's medical history, and you cannot examine them. Your knowledge stops at general awareness - never specific diagnosis.
 
-MEMORY: Early in the call, ask the caller for their name so you can check if you already know them. Call the look_up_caller function with their name as soon as you have it. If a record is found, greet them warmly by name and reference the last thing you discussed, for example: "Namaste Ramesh, last time we spoke about your headache. How are you feeling now?" If no record is found, treat them as a new caller. Before saving anything new you learn about them (name, age band, ongoing conditions, or the outcome of this call), ask the caller for permission first, for example: "Is it okay if I remember this for next time?" If they say no, do not call the save function for that information. If they say yes, call the remember_caller_info function with only short structured facts (like "asthma" or "35-45"), never full written-out medical notes or sentences.
+MEMORY: Early in the call, ask the caller for their name so you can check if you already know them. Call the look_up_caller function with their name as soon as you have it. If a record is found, greet them warmly by name and reference the last thing you discussed. If no record is found, treat them as a new caller. Before saving anything new you learn about them, ask the caller for permission first. If they say no, do not call the save function. If they say yes, call the remember_caller_info function with only short structured facts, never full written-out medical notes or sentences.
+
+FACILITY LOOKUP: If the caller needs in-person care, or asks where to go, ask which district or city they are in, then call the find_nearest_facility function with that district name. Speak the result naturally in a sentence, do not read it out as raw data. Always mention that this is from a reference list of major government hospitals, not a live, real-time source, so they should call ahead if possible. If the district is not in your list, say so honestly, and suggest they contact their local ASHA worker or dial 108 for emergency ambulance services in India - do not guess or invent a facility name.
 
 LANGUAGE: Mirror the user's language and mix. If they speak Hindi, English, or a code-mixed blend of both, reply in the same register and mix naturally. Keep formality relaxed and warm, like a knowledgeable neighbor, not a hospital form.
 
@@ -88,6 +91,34 @@ class Assistant(Agent):
             facts=facts,
         )
         return "Saved."
+
+    @function_tool
+    async def find_nearest_facility(self, context: RunContext, district: str):
+        """Use this tool to find a government health facility in the caller's district.
+
+        Call this when the caller needs in-person care or asks where to go for treatment.
+        This looks up a small local reference list of major government hospitals, not a live data source.
+
+        Args:
+            district: The district or city name the caller is located in.
+        """
+        logger.info(f"Looking up facility for district: {district}")
+        try:
+            result = facilities.lookup_facility(district)
+        except Exception as e:
+            logger.error(f"Facility lookup failed: {e}")
+            return "The facility lookup is temporarily unavailable. Advise the caller to contact their local ASHA worker or dial 108 for emergency ambulance services."
+
+        if result is None:
+            return f"No facility found for '{district}' in the local reference list. Advise the caller to contact their local ASHA worker or dial 108 for emergency ambulance services. Do not invent a facility name."
+
+        return {
+            "district": district,
+            "facility_name": result["name"],
+            "facility_type": result["type"],
+            "address": result["address"],
+            "source": "local reference list of major government hospitals, not live real-time data",
+        }
 
 
 server = AgentServer()

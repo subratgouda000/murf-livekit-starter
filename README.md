@@ -198,6 +198,15 @@ See the Configuration section below for voice, STT, and LLM options.
 
 ---
 
+## Data Sources & Known Limitations
+
+This project is built for the **Health Access** track of the 10 Days of Voice Agents — VoiceForBharat Edition challenge.
+
+- **Caller memory** (Day 4): stored locally in SQLite (`backend/callers.db`). Persists across restarts.
+- **Facility lookup tool** (Day 5): `find_nearest_facility` uses a small **hand-built local dataset** (`backend/src/facilities.py`) of major government hospitals across 10 Indian cities. This is **not a live government API** — a real-time facility registry API was not readily available for this integration within the challenge timeframe. The agent always tells the caller this is from a reference list, not live data, and recommends calling ahead to confirm. If a district isn't in the list, the agent honestly says so and redirects to the local ASHA worker or India's emergency ambulance number (108), rather than inventing a facility name.
+
+---
+
 ## Configuration
 
 ### Murf voice
