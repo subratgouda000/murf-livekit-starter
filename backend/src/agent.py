@@ -20,6 +20,7 @@ from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 import db
 import facilities
+import escalation
 
 logger = logging.getLogger("agent")
 
@@ -37,11 +38,13 @@ MEMORY: Early in the call, ask the caller for their name so you can check if you
 
 FACILITY LOOKUP: If the caller needs in-person care, or asks where to go, ask which district or city they are in, then call the find_nearest_facility function with that district name. Speak the result naturally in a sentence, do not read it out as raw data. Always mention that this is from a reference list of major government hospitals, not a live, real-time source, so they should call ahead if possible. If the district is not in your list, say so honestly, and suggest they contact their local ASHA worker or dial 108 for emergency ambulance services in India - do not guess or invent a facility name.
 
+HUMAN ESCALATION: You must ask for human help in exactly two situations: (1) the caller describes a red-flag symptom such as chest pain, trouble breathing, heavy bleeding, confusion, fainting, or high fever in a baby, or (2) the caller directly asks you to diagnose their condition or name a specific medicine to take. When either happens, first tell the caller clearly what you would like to send to a human on their behalf - their name, a short description of what happened, what you already checked with them, how urgent it seems, their language, and how they would like to be followed up with (call back, message, etc). Ask for their permission before sending anything. If they say no, do not call the escalation function, and instead just give your normal safety guidance. If they say yes, call the create_escalation function with a short, safe summary - never include passwords, OTPs, PINs, account numbers, or other private information, and never send the full raw conversation. After it is created, tell the caller the reference ID it returns, and give them an honest next step - do not promise an immediate reply unless that is true; say a human will follow up as soon as possible. Do not escalate for normal, non-urgent conversations - only for these two situations.
+
 LANGUAGE: Mirror the user's language and mix. If they speak Hindi, English, or a code-mixed blend of both, reply in the same register and mix naturally. Keep formality relaxed and warm, like a knowledgeable neighbor, not a hospital form.
 
 LANGUAGE & SCRIPT: Always write every language in its own native script. Hindi should use Devanagari script, never romanized spelling. The same rule applies to all non-English languages.
 
-GUARDRAILS: Never diagnose a condition. Never name or suggest a specific prescription drug or dosage. Never claim you are a doctor or can replace one. If the person describes a red-flag symptom (chest pain, trouble breathing, heavy bleeding, confusion, fainting, high fever in a baby), stop and say clearly: "This sounds like something a doctor should look at in person. Please visit your nearest health center or call your ASHA worker right away." For anything outside health topics, politely say that's outside what you can help with.
+GUARDRAILS: Never diagnose a condition. Never name or suggest a specific prescription drug or dosage. Never claim you are a doctor or can replace one. If the person describes a red-flag symptom, follow the HUMAN ESCALATION process above in addition to advising them to seek care. For anything outside health topics, politely say that's outside what you can help with.
 
 STYLE: Speak in short, natural sentences - like a real conversation, not a list. Keep replies to 1-3 sentences. Be warm and unhurried. Begin every new call with a brief greeting asking for the caller's name."""
 
@@ -119,6 +122,44 @@ class Assistant(Agent):
             "address": result["address"],
             "source": "local reference list of major government hospitals, not live real-time data",
         }
+
+    @function_tool
+    async def create_escalation(
+        self,
+        context: RunContext,
+        caller_name: str,
+        what_happened: str,
+        already_checked: str,
+        urgency: str,
+        language: str,
+        follow_up_method: str,
+    ):
+        """Use this tool to send a request for human help.
+
+        Only call this after the caller has given explicit permission to share
+        this summary with a human. Never include passwords, OTPs, PINs, account
+        numbers, or other private information in any of these fields.
+
+        Args:
+            caller_name: The caller's name.
+            what_happened: A short, safe description of the situation - no raw transcript.
+            already_checked: A short note on what you already asked or ruled out.
+            urgency: How urgent this seems, e.g. "high", "medium", "low", "emergency".
+            language: The language the caller prefers, e.g. "Hindi", "English", "Hinglish".
+            follow_up_method: How the caller wants to be followed up with, e.g. "phone call", "message".
+        """
+        logger.info(f"Creating escalation for {caller_name}: {what_happened}")
+        reference_id, sent_ok = escalation.create_escalation(
+            caller_name=caller_name,
+            what_happened=what_happened,
+            already_checked=already_checked,
+            urgency=urgency,
+            language=language,
+            follow_up_method=follow_up_method,
+        )
+        if not sent_ok:
+            return f"Escalation was logged with reference ID {reference_id}, but sending it to the human team failed. Tell the caller their reference ID and that you will keep trying, without promising a specific response time."
+        return f"Escalation created successfully with reference ID {reference_id}. Tell the caller this reference ID and that a human will follow up as soon as possible - do not promise an exact time."
 
 
 server = AgentServer()
