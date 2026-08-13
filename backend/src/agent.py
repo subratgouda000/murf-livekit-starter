@@ -1,4 +1,5 @@
 ﻿import logging
+import uuid
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -52,6 +53,8 @@ STYLE: Speak in short, natural sentences - like a real conversation, not a list.
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
+        self.meaningful_exchange = False
+        self.escalation_created = False
 
     @function_tool
     async def look_up_caller(self, context: RunContext, name: str):
@@ -63,6 +66,7 @@ class Assistant(Agent):
             name: The caller's name, as they told you.
         """
         logger.info(f"Looking up caller: {name}")
+        self.meaningful_exchange = True
         record = db.get_caller(name)
         if record is None:
             return "No existing record found for this caller. Treat them as a new caller."
@@ -87,6 +91,7 @@ class Assistant(Agent):
             facts: A small dictionary of short facts, e.g. {"age_band": "35-45", "ongoing_conditions": "asthma", "last_triage_outcome": "advised rest"}.
         """
         logger.info(f"Saving caller info: {name} {facts}")
+        self.meaningful_exchange = True
         db.save_caller(
             user_id=name,
             name=name,
@@ -106,6 +111,7 @@ class Assistant(Agent):
             district: The district or city name the caller is located in.
         """
         logger.info(f"Looking up facility for district: {district}")
+        self.meaningful_exchange = True
         try:
             result = facilities.lookup_facility(district)
         except Exception as e:
@@ -149,6 +155,8 @@ class Assistant(Agent):
             follow_up_method: How the caller wants to be followed up with, e.g. "phone call", "message".
         """
         logger.info(f"Creating escalation for {caller_name}: {what_happened}")
+        self.meaningful_exchange = True
+        self.escalation_created = True
         reference_id, sent_ok = escalation.create_escalation(
             caller_name=caller_name,
             what_happened=what_happened,
@@ -178,6 +186,9 @@ async def my_agent(ctx: JobContext):
         "room": ctx.room.name,
     }
 
+    call_id = str(uuid.uuid4())
+    db.start_call(call_id, ctx.room.name)
+
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="multi"),
         llm=google.LLM(
@@ -194,8 +205,24 @@ async def my_agent(ctx: JobContext):
         preemptive_generation=True,
     )
 
+    assistant = Assistant()
+
+    def on_user_transcript(transcript):
+        text = getattr(transcript, "transcript", "") or ""
+        if len(text.strip().split()) >= 3:
+            assistant.meaningful_exchange = True
+
+    session.on("user_input_transcribed", on_user_transcript)
+
+    async def finalize_call():
+        outcome = "successful" if assistant.meaningful_exchange else "failed"
+        db.end_call(call_id, outcome)
+        logger.info(f"Call {call_id} ended with outcome: {outcome}")
+
+    ctx.add_shutdown_callback(finalize_call)
+
     await session.start(
-        agent=Assistant(),
+        agent=assistant,
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
